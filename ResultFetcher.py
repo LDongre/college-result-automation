@@ -1,9 +1,12 @@
+import time
+import cv2
+import urllib.request
+from pytesseract import image_to_string
 from selenium import webdriver
 from selenium.webdriver.firefox.firefox_binary import FirefoxBinary
 from selenium.webdriver.support.ui import Select
-import urllib.request
-from pytesseract import image_to_string
-import cv2
+
+import ImageOptimizer2 as io2
 
 
 class Student:
@@ -22,86 +25,85 @@ class Student:
         print('sem:', self.sem)
         print('sgpa:', self.sgpa)
 
-#Key variables
+
+# Key variables
 COURSE = 'BTech'
 CLG_CODE = '0101'
 BRANCH = 'CS'
-ROLL_START = 171012
+ROLL_START = 171015
 ROLL_END = 171069
 SEM = '5'
 
-#launch instance of firefox
+# launch instance of firefox
 binary = FirefoxBinary('/etc/firefox/firefox')
 driver = webdriver.Firefox(firefox_binary=binary)
 driver.get('http://www.uitrgpv.ac.in/Exam/ProgramSelect.aspx')
 
-#select course
+# select course
 btech_xpath = '/html/body/form/table/tbody/tr[2]/td/table/tbody/tr[2]/td[4]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr[2]/td/table/tbody/tr/td[5]/label'
 btech = driver.find_element_by_xpath(btech_xpath)
 btech.click()
 
-for number in range(ROLL_START, ROLL_START + 2):
+for number in range(ROLL_START, ROLL_START + 10):
 
-    studentNo = CLG_CODE + BRANCH + str(number)
-
-    rollno_xpath = '//*[@id="ctl00_ContentPlaceHolder1_txtrollno"]'
-    rollno = driver.find_element_by_xpath(rollno_xpath)
-    rollno.send_keys(studentNo)
-
-    sem_xpath = '//*[@id="ctl00_ContentPlaceHolder1_drpSemester"]'
-    sem = Select(driver.find_element_by_xpath(sem_xpath))
-    sem.select_by_visible_text(SEM)
 
     captcha_decoded = False
 
-    while (captcha_decoded == False):
+    while not captcha_decoded:
 
-        #download captcha image
-        captcha_xpath = '/html/body/form/table/tbody/tr[2]/td/table/tbody/tr[2]/td[4]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/div/table/tbody/tr[1]/td/div/img'
-        captcha = driver.find_element_by_xpath(captcha_xpath)
-        captcha_src = captcha.get_attribute('src')
-        urllib.request.urlretrieve(captcha_src, 'Captcha Images/captcha' + studentNo + '.png')
+        try:
+            studentNo = CLG_CODE + BRANCH + str(number)
 
-        #remove noise
-        image = cv2.imread('Captcha Images/captcha' + studentNo + '.png', 0)
-        # cv2.imshow('image', image)
+            rollno_xpath = '//*[@id="ctl00_ContentPlaceHolder1_txtrollno"]'
+            rollno = driver.find_element_by_xpath(rollno_xpath)
+            rollno.send_keys(studentNo)
 
-        blur = cv2.blur(image,(4,4))
-        # cv2.imshow('blur', blur)
+            sem_xpath = '//*[@id="ctl00_ContentPlaceHolder1_drpSemester"]'
+            sem = Select(driver.find_element_by_xpath(sem_xpath))
+            sem.select_by_visible_text(SEM)
 
-        ret,thresh = cv2.threshold(blur,127,255,cv2.THRESH_BINARY)
+            # download captcha image
+            captcha_xpath = '/html/body/form/table/tbody/tr[2]/td/table/tbody/tr[2]/td[4]/table/tbody/tr[2]/td/table/tbody/tr[2]/td/div/table/tbody/tr[1]/td/div/img'
+            captcha = driver.find_element_by_xpath(captcha_xpath)
 
-        # cv2.imshow('thresh', thresh)
+            captcha_src = captcha.get_attribute('src')
+            urllib.request.urlretrieve(captcha_src, 'Captcha Images/captcha' + studentNo + '.png')
 
-        # th3 = cv2.adaptiveThreshold(thresh,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11,8)
-        # cv2.imshow('th3', th3)
+            # load image
+            image = cv2.imread('Captcha Images/captcha' + studentNo + '.png', 0)
 
-        # print(image.shape)
+            # remove noise
+            image = io2.erode(io2.thold(io2.med_blur(image, 5), 127), 2, 2)
 
-        # cv2.imwrite('Captcha Images/decoded.png', thresh)
-        captcha_text = image_to_string(thresh, config="-c tessedit_char_whitelist=ACDEFGHJKLMNPQRTUVWXYZ2346789")
+            # read image
+            captcha_text = image_to_string(image, config="-c tessedit_char_whitelist=ACDEFGHJKLMNPQRTUVWXYZ2346789")
 
-        print(captcha_text)
-        print(len(captcha_text))
-        # test_xpath = '//*[@id="ctl00_ContentPlaceHolder1_"]'
-        # test = driver.find_element_by_xpath(test_xpath)
-        # if test is None:
-        #     print('test is None')
+            captcha_text = captcha_text if captcha_text is not None else 'EMPTY'
+            print(captcha_text)
 
+            time.sleep(2)
 
-        # fill captcha
-        captcha_field_xpath = '//*[@id="ctl00_ContentPlaceHolder1_TextBox1"]'
-        captcha_field = driver.find_element_by_xpath(captcha_field_xpath)
-        captcha_field.clear()
-        captcha_field.send_keys(captcha_text)
+            # fill captcha
+            captcha_field_xpath = '//*[@id="ctl00_ContentPlaceHolder1_TextBox1"]'
+            captcha_field = driver.find_element_by_xpath(captcha_field_xpath)
+            captcha_field.clear()
+            captcha_field.send_keys(captcha_text)
 
-        if captcha_text == '':
-            print("EMPTY CAPTCHA")
+            if captcha_text == '':
+                print("EMPTY CAPTCHA")
 
-        #click submit button
-        submit_xpath = '//*[@id="ctl00_ContentPlaceHolder1_btnviewresult"]'
-        submit = driver.find_element_by_xpath(submit_xpath)
-        submit.click()
+            # click submit button
+            submit_xpath = '//*[@id="ctl00_ContentPlaceHolder1_btnviewresult"]'
+            submit = driver.find_element_by_xpath(submit_xpath)
+            submit.click()
+
+        except:
+            time.sleep(2)
+            # reset form
+            reset_xpath = '//*[@id="ctl00_ContentPlaceHolder1_btnReset"]'
+            reset = driver.find_element_by_xpath(reset_xpath)
+            reset.click()
+            captcha_decoded = True
 
         try:
             student = Student()
@@ -109,32 +111,31 @@ for number in range(ROLL_START, ROLL_START + 2):
             # finding student details
             st_name_xpath = '//*[@id="ctl00_ContentPlaceHolder1_lblNameGrading"]'
             st_name = driver.find_element_by_xpath(st_name_xpath)
-            student.name = st_name.text
+            student.name = st_name.text if st_name.text is not None else ''
 
             st_rollno_xpath = '//*[@id="ctl00_ContentPlaceHolder1_lblRollNoGrading"]'
             st_rollno = driver.find_element_by_xpath(st_rollno_xpath)
-            student.rollno = st_rollno.text
+            student.rollno = st_rollno.text if st_rollno.text is not None else ''
 
             st_branch_xpath = '//*[@id="ctl00_ContentPlaceHolder1_lblBranchGrading"]'
             st_branch = driver.find_element_by_xpath(st_branch_xpath)
-            student.branch = st_branch.text
+            student.branch = st_branch.text if st_branch.text is not None else ''
 
             student.course = COURSE
             student.sem = SEM
 
             st_sgpa_xpath = '//*[@id="ctl00_ContentPlaceHolder1_lblSGPA"]'
             st_sgpa = driver.find_element_by_xpath(st_sgpa_xpath)
-            student.sgpa = st_sgpa.text
+            student.sgpa = st_sgpa.text if st_sgpa.text is not None else ''
 
-            # print(student.name, student.rollno, student.branch, student.course, student.sem, student.sgpa)
             student.display()
+
             captcha_decoded = True
 
-            #reset form
-            reset_xpath='//*[@id="ctl00_ContentPlaceHolder1_btnReset"]'
+            # reset form
+            reset_xpath = '//*[@id="ctl00_ContentPlaceHolder1_btnReset"]'
             reset = driver.find_element_by_xpath(reset_xpath)
             reset.click()
 
         except:
             pass
-
